@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SynMark — Análisis sintáctico</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff; --bg2: #f5f5f5; --fg: #1a1a1a; --fg2: #666;
+  --border: #ddd; --border2: #ccc;
+  --blue: #4a90d9; --orange: #e07b39;
+  --font-mono: 'Courier New', monospace;
+  --font-sans: system-ui, sans-serif;
+  --font-serif: Georgia, 'Times New Roman', serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e; --bg2: #2a2a2a; --fg: #e8e6df; --fg2: #999;
+    --border: #444; --border2: #555;
+  }
+}
+body { font-family: var(--font-sans); background: var(--bg); color: var(--fg); min-height: 100vh; display: flex; flex-direction: column; }
+header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
+header span { font-size: 12px; color: var(--fg2); }
+.app { display: flex; flex-direction: column; flex: 1; }
+.toolbar { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; background: var(--bg2); }
+.toolbar span.lbl { font-size: 12px; color: var(--fg2); margin-right: 2px; white-space: nowrap; }
+.sep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+.chip { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border2); background: var(--bg); color: var(--fg2); cursor: pointer; font-family: var(--font-mono); white-space: nowrap; transition: all 0.12s; }
+.chip:hover { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chip.above { border-color: var(--blue); color: var(--blue); }
+.chip.above:hover { background: var(--blue); color: #fff; }
+.chip.below { border-color: var(--orange); color: var(--orange); }
+.chip.below:hover { background: var(--orange); color: #fff; }
+.editor-area { display: flex; flex-direction: column; }
+textarea {
+  width: 100%; border: none; outline: none;
+  padding: 14px 16px; font-family: var(--font-mono); font-size: 14px;
+  background: var(--bg2); color: var(--fg);
+  border-bottom: 1px solid var(--border); resize: vertical; min-height: 70px;
+}
+.preview {
+  background: var(--bg); padding: 36px 24px;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 200px; overflow-x: auto; flex: 1;
+}
+.actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg2); flex-wrap: wrap; }
+.actions button {
+  padding: 6px 14px; font-size: 13px; border-radius: 5px;
+  border: 1px solid var(--border2); background: var(--bg); color: var(--fg);
+  cursor: pointer; transition: all 0.12s;
+}
+.actions button:hover { background: var(--fg); color: var(--bg); }
+.err { font-size: 12px; color: #c0392b; padding: 6px 16px; background: #fef0f0; border-bottom: 1px solid #f5c6cb; }
+.hint { font-size: 11px; color: var(--fg2); padding: 6px 16px 10px; line-height: 1.6; border-top: 1px solid var(--border); }
+
+/* ── Etiquetas personalizadas ── */
+.custom-row { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; background: var(--bg2); }
+.custom-row span.lbl { font-size: 12px; color: var(--fg2); margin-right: 2px; white-space: nowrap; }
+.chip.custom { position: relative; padding-right: 18px; }
+.chip .del { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); font-weight: bold; opacity: 0.55; line-height: 1; }
+.chip .del:hover { opacity: 1; color: #c0392b; }
+.addtag-btn { font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px dashed var(--border2); background: transparent; color: var(--fg2); cursor: pointer; white-space: nowrap; transition: all 0.12s; }
+.addtag-btn:hover { border-color: var(--fg); color: var(--fg); }
+.tagform { display: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg2); }
+.tagform.open { display: flex; }
+.tagform input[type="text"], .tagform select {
+  font-size: 12px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border2);
+  background: var(--bg); color: var(--fg); font-family: var(--font-sans);
+}
+.tagform label { font-size: 12px; color: var(--fg2); display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+.tagform button { font-size: 12px; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border2); background: var(--bg); color: var(--fg); cursor: pointer; transition: all 0.12s; }
+.tagform button:hover { background: var(--fg); color: var(--bg); }
+.tagform button.ghost { background: transparent; border-style: dashed; }
+.tagform button.ghost:hover { background: var(--bg2); color: var(--fg); }
+
+/* ── Footer: autoría / licencias ── */
+.appfooter {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 6px 16px; padding: 8px 16px; border-top: 1px solid var(--border);
+  background: var(--bg2); font-size: 11px; color: var(--fg2); line-height: 1.6;
+}
+.appfooter a { color: var(--fg2); text-decoration: none; border-bottom: 1px dotted var(--border2); }
+.appfooter a:hover { color: var(--fg); border-color: var(--fg); }
+.appfooter .dl-pkg { white-space: nowrap; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SynMark</h1>
+  <span>Análisis sintáctico — sintaxismark v0.6.20</span>
+</header>
+<div class="app">
+  <div class="toolbar">
+    <span class="lbl">Arriba:</span>
+    <span class="chip above" onclick="ins('SES{…}')">SES</span>
+    <span class="chip above" onclick="ins('PVS{…}')">PVS</span>
+    <span class="chip above" onclick="ins('PVC{…}')">PVC</span>
+    <span class="chip above" onclick="ins('SEC{…}')">SEC</span>
+    <span class="chip above" onclick="ins('ST{…}')">ST</span>
+    <span class="chip above" onclick="ins('OS{…}')">OS</span>
+    <div class="sep"></div>
+    <span class="lbl">Caja:</span>
+    <span class="chip below" onclick="ins('OD*{…}')">OD*</span>
+    <span class="chip below" onclick="ins('OI*{…}')">OI*</span>
+    <span class="chip below" onclick="ins('MI*{…}')">MI*</span>
+    <span class="chip below" onclick="ins('CCL*{…}')">CCL*</span>
+    <span class="chip below" onclick="ins('COMP*{…}')">COMP*</span>
+    <span class="chip below" onclick="ins('MD*{…}')">MD*</span>
+    <span class="chip below" onclick="ins('CL*{…}')">CL*</span>
+    <span class="chip below" onclick="ins('CM*{…}')">CM*</span>
+    <span class="chip below" onclick="ins('PSO*{…}')">PSO*</span>
+    <span class="chip below" onclick="ins('PSNO*{…}')">PSNO*</span>
+    <span class="chip below" onclick="ins('POO*{…}')">POO*</span>
+    <span class="chip below" onclick="ins('ACT*{…}')">ACT*</span>
+    <span class="chip below" onclick="ins('ACL*{…}')">ACL*</span>
+    <span class="chip below" onclick="ins('ACM*{…}')">ACM*</span>
+    <span class="chip below" onclick="ins('ACF*{…}')">ACF*</span>
+    <span class="chip below" onclick="ins('ACC*{…}')">ACC*</span>
+    <span class="chip below" onclick="ins('MG*{…}')">MG*</span>
+    <span class="chip below" onclick="ins('Ap*{…}')">Ap*</span>
+    <div class="sep"></div>
+    <span class="lbl">Etiq:</span>
+    <span class="chip" onclick="ins('N{…}')">N</span>
+    <span class="chip" onclick="ins('NN{…}')">NN</span>
+    <span class="chip" onclick="ins('NV{…}')">NV</span>
+    <span class="chip" onclick="ins('NP{…}')">NP</span>
+    <span class="chip" onclick="ins('NA{…}')">NA</span>
+    <span class="chip" onclick="ins('NAD{…}')">NAD</span>
+    <span class="chip" onclick="ins('MD{…}')">MD</span>
+    <span class="chip" onclick="ins('OD{…}')">OD</span>
+    <span class="chip" onclick="ins('OI{…}')">OI</span>
+    <span class="chip" onclick="ins('MG{…}')">MG</span>
+    <span class="chip" onclick="ins('Ap{…}')">Ap</span>
+    <span class="chip" onclick="ins('MF{…}')">MF</span>
+    <span class="chip" onclick="ins('ACT{…}')">ACT</span>
+    <span class="chip" onclick="ins('ACL{…}')">ACL</span>
+    <span class="chip" onclick="ins('ACM{…}')">ACM</span>
+    <span class="chip" onclick="ins('ACF{…}')">ACF</span>
+    <span class="chip" onclick="ins('ACC{…}')">ACC</span>
+    <span class="chip" onclick="ins('ACCant{…}')">ACCant</span>
+    <span class="chip" onclick="ins('ACI{…}')">ACI</span>
+    <span class="chip" onclick="ins('ACFin{…}')">ACFin</span>
+  </div>
+  <div class="custom-row" id="customRow">
+    <span class="lbl">Personalizadas:</span>
+    <span id="customChips"></span>
+    <span class="addtag-btn" onclick="toggleTagForm()">+ nueva etiqueta</span>
+    <span class="addtag-btn" onclick="exportTags()">↓ exportar</span>
+    <span class="addtag-btn" onclick="document.getElementById('importFile').click()">↑ importar</span>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importTags(event)">
+  </div>
+  <div class="tagform" id="tagForm">
+    <input type="text" id="ctName" placeholder="Comando (ej: FOC)" maxlength="20">
+    <input type="text" id="ctLabel" placeholder="Etiqueta (ej: foco)" maxlength="30">
+    <select id="ctKind" onchange="onKindChange()">
+      <option value="tagbelow">Etiqueta abajo</option>
+      <option value="openbox">Caja abajo</option>
+      <option value="spanline">Línea arriba</option>
+    </select>
+    <label id="ctUlWrap"><input type="checkbox" id="ctUl"> subrayado</label>
+    <label id="ctPairWrap"><input type="checkbox" id="ctPair"> + variante en caja (NOMBRE*)</label>
+    <button onclick="addCustomTag()">Agregar</button>
+    <button class="ghost" onclick="toggleTagForm()">Cancelar</button>
+  </div>
+  <div class="editor-area">
+    <textarea id="src" rows="3" spellcheck="false" placeholder="Ej: SES{N{Juan}} PVS{construyó OD*{MD{una} N{casa}}}">SES{N{Juan}} PVS{construyó OD*{MD{una} N{casa}}}</textarea>
+  </div>
+  <div id="err" class="err" style="display:none"></div>
+  <div class="preview" id="preview"></div>
+  <div class="actions">
+    <button onclick="dlSVG()">↓ Descargar SVG</button>
+    <button onclick="dlPNG()">↓ Descargar PNG</button>
+    <button onclick="copySVG()">Copiar SVG</button>
+  </div>
+  <div class="hint">
+    <strong>Notación:</strong>
+    CMD*{…} = openbox (caja con línea abajo) &nbsp;|&nbsp;
+    CMD{…} = tagbelow (etiqueta) &nbsp;|&nbsp;
+    Anidable: SES{N{Juan}} PVS{NV{construyó} OD*{MD{una} N{casa}}} &nbsp;|&nbsp;
+    OD y OI sin estrella llevan subrayado automático. &nbsp;|&nbsp;
+    Con <em>+ nueva etiqueta</em> podés definir tus propios comandos; quedan guardados en este navegador (exportá/importá para respaldarlos o compartirlos).
+  </div>
+</div>
+<footer class="appfooter">
+  <span>SynMark &amp; sintaxismark — Pablo Zdrojewski, © <span id="year"></span>.
+    Código: <a href="https://opensource.org/license/mit" target="_blank" rel="noopener">MIT</a> ·
+    Paquete LaTeX: <a href="https://www.latex-project.org/lppl/lppl-1-3c/" target="_blank" rel="noopener">LPPL 1.3c</a> ·
+    Diagramas/documentación: <a href="https://creativecommons.org/licenses/by/4.0/deed.es" target="_blank" rel="noopener">CC BY 4.0</a>
+  </span>
+  <a class="dl-pkg" href="sintaxismark-paquete.zip" download>↓ sintaxismark.sty + manual (ES)</a>
+</footer>
+
+<script>
+// ── Tabla de comandos (sincronizada con sintaxismark v0.6.20) ──────────────────
+const CMDS = {
+  SES:["spanline","ses",false], PVS:["spanline","pvs",false], PVC:["spanline","pvc",false],
+  SEC:["spanline","sec",false], ST:["spanline","st",false], OS:["spanline","os",false],
+  "OD*":["openbox","od",false], "OI*":["openbox","oi",false], "CCL*":["openbox","ccl",false],
+  "COMP*":["openbox","comp",false], "MD*":["openbox","md",false], "MI*":["openbox","mi",false],
+  "CAg*":["openbox","cag",false], "CREG*":["openbox","creg",false], "CSim*":["openbox","csim",false],
+  "CL*":["openbox","cl",false], "CM*":["openbox","cm",false], "PSO*":["openbox","pso",false],
+  "PSNO*":["openbox","psno",false], "POO*":["openbox","poo",false], "PONO*":["openbox","pono",false],
+  "ACT*":["openbox","act",false], "ACL*":["openbox","acl",false], "ACM*":["openbox","acm",false],
+  "ACF*":["openbox","acf",false], "ACC*":["openbox","acc",false], "ACCant*":["openbox","accant",false],
+  "ACI*":["openbox","acinst",false], "ACFin*":["openbox","acfin",false],
+  "MG*":["openbox","mg",false], "Ap*":["openbox","ap",false], "MF*":["openbox","mf",false],
+  "IPCR*":["openbox","ipcr",false], "Incl*":["openbox","incl",false],
+  OD:["tagbelow","od",true], OI:["tagbelow","oi",true],
+  CCL:["tagbelow","ccl",false], COMP:["tagbelow","comp",false], MD:["tagbelow","md",false],
+  MI:["tagbelow","mi",false], CAg:["tagbelow","cag",false], CREG:["tagbelow","creg",false],
+  CSim:["tagbelow","csim",false], CL:["tagbelow","cl",false], CM:["tagbelow","cm",false],
+  PSO:["tagbelow","pso",false], PSNO:["tagbelow","psno",false], POO:["tagbelow","poo",false],
+  PONO:["tagbelow","pono",false], ACT:["tagbelow","act",false], ACL:["tagbelow","acl",false],
+  ACM:["tagbelow","acm",false], ACF:["tagbelow","acf",false], ACC:["tagbelow","acc",false],
+  ACCant:["tagbelow","accant",false], ACI:["tagbelow","acinst",false], ACFin:["tagbelow","acfin",false],
+  MG:["tagbelow","mg",false], Ap:["tagbelow","ap",false], MF:["tagbelow","mf",false],
+  IPCR:["tagbelow","ipcr",false], Incl:["tagbelow","incl",false],
+  N:["tagbelow","n",false], NN:["tagbelow","nn",true], NV:["tagbelow","nv",true],
+  NP:["tagbelow","np",false], NA:["tagbelow","na",false], NAD:["tagbelow","nadv",false],
+};
+
+// ── Etiquetas personalizadas ────────────────────────────────────────────────
+const CUSTOM_KEY = 'synmark_custom_tags_v1';
+let CUSTOM_TAGS = [];
+
+// Agrega un comando definido por el usuario a la tabla CMDS (motor de render)
+function registerCustomTag(def) {
+  CMDS[def.name] = [def.kind, def.label, !!def.ul];
+  if (def.kind === 'tagbelow' && def.pair) {
+    CMDS[def.name + '*'] = ['openbox', def.label, false];
+  }
+}
+
+function loadCustomTags() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_KEY);
+    if (raw) CUSTOM_TAGS = JSON.parse(raw);
+  } catch(e) { CUSTOM_TAGS = []; }
+  for (const def of CUSTOM_TAGS) registerCustomTag(def);
+  renderCustomChips();
+}
+
+function saveCustomTags() {
+  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(CUSTOM_TAGS)); } catch(e) {}
+}
+
+function makeChip(name, kind) {
+  const cls = kind === 'spanline' ? 'above' : kind === 'openbox' ? 'below' : '';
+  const span = document.createElement('span');
+  span.className = ('chip custom ' + cls).trim();
+  span.appendChild(document.createTextNode(name));
+  span.title = 'Insertar ' + name + '{…}';
+  span.addEventListener('click', () => ins(name + '{…}'));
+  const del = document.createElement('span');
+  del.className = 'del'; del.textContent = '×';
+  del.title = 'Eliminar etiqueta';
+  del.addEventListener('click', (ev) => { ev.stopPropagation(); removeCustomTag(name.replace(/\*$/, '')); });
+  span.appendChild(del);
+  return span;
+}
+
+function renderCustomChips() {
+  const box = document.getElementById('customChips');
+  box.innerHTML = '';
+  for (const def of CUSTOM_TAGS) {
+    box.appendChild(makeChip(def.name, def.kind));
+    if (def.kind === 'tagbelow' && def.pair) box.appendChild(makeChip(def.name + '*', 'openbox'));
+  }
+}
+
+function removeCustomTag(name) {
+  const idx = CUSTOM_TAGS.findIndex(d => d.name === name);
+  if (idx === -1) return;
+  const def = CUSTOM_TAGS[idx];
+  delete CMDS[def.name];
+  if (def.kind === 'tagbelow' && def.pair) delete CMDS[def.name + '*'];
+  CUSTOM_TAGS.splice(idx, 1);
+  saveCustomTags();
+  renderCustomChips();
+}
+
+function toggleTagForm() {
+  const form = document.getElementById('tagForm');
+  form.classList.toggle('open');
+  if (form.classList.contains('open')) onKindChange();
+}
+
+function onKindChange() {
+  const kind = document.getElementById('ctKind').value;
+  const show = kind === 'tagbelow' ? '' : 'none';
+  document.getElementById('ctUlWrap').style.display = show;
+  document.getElementById('ctPairWrap').style.display = show;
+}
+
+function addCustomTag() {
+  const name  = document.getElementById('ctName').value.trim();
+  const label = document.getElementById('ctLabel').value.trim();
+  const kind  = document.getElementById('ctKind').value;
+  const ul    = document.getElementById('ctUl').checked;
+  const pair  = document.getElementById('ctPair').checked;
+
+  if (!name || !label) { alert('Completá el comando y la etiqueta.'); return; }
+  if (/[\s{}*]/.test(name)) { alert('El nombre del comando no puede tener espacios, llaves ni *.'); return; }
+  if (CMDS[name] || (kind === 'tagbelow' && pair && CMDS[name + '*'])) {
+    alert(`Ya existe un comando "${name}".`); return;
+  }
+
+  const def = {
+    name, label, kind,
+    ul:   kind === 'tagbelow' ? ul   : false,
+    pair: kind === 'tagbelow' ? pair : false,
+  };
+  CUSTOM_TAGS.push(def);
+  registerCustomTag(def);
+  saveCustomTags();
+  renderCustomChips();
+
+  document.getElementById('ctName').value = '';
+  document.getElementById('ctLabel').value = '';
+  toggleTagForm();
+}
+
+function exportTags() {
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(CUSTOM_TAGS, null, 2));
+  a.download = 'synmark-etiquetas.json'; a.click();
+}
+
+function importTags(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const arr = JSON.parse(reader.result);
+      let added = 0, skipped = 0;
+      for (const def of arr) {
+        if (!def.name || !def.label || !def.kind || CMDS[def.name]) { skipped++; continue; }
+        CUSTOM_TAGS.push(def);
+        registerCustomTag(def);
+        added++;
+      }
+      saveCustomTags();
+      renderCustomChips();
+      if (skipped) alert(`Importadas ${added}, omitidas ${skipped} (nombre repetido o inválido).`);
+    } catch(e) { alert('Archivo inválido: ' + e.message); }
+    ev.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ── Parser ─────────────────────────────────────────────────────────────────────
+function tokenize(src) {
+  const toks = []; let i = 0;
+  while (i < src.length) {
+    if (/\s/.test(src[i])) { i++; continue; }
+    if (src[i] === '{') { toks.push(['LB','{']); i++; }
+    else if (src[i] === '}') { toks.push(['RB','}']); i++; }
+    else {
+      let j = i;
+      while (j < src.length && !/[\s{}]/.test(src[j])) j++;
+      const w = src.slice(i, j);
+      toks.push([Object.prototype.hasOwnProperty.call(CMDS, w) ? 'CMD' : 'WORD', w]);
+      i = j;
+    }
+  }
+  return toks;
+}
+
+function parse(src) {
+  const toks = tokenize(src); let pos = 0;
+  const peek = () => pos < toks.length ? toks[pos] : ['EOF',''];
+  const eat  = () => toks[pos++];
+  function seq() {
+    const kids = [];
+    while (!['RB','EOF'].includes(peek()[0])) {
+      const [t,v] = peek();
+      if (t === 'CMD') {
+        eat(); eat();
+        const ch = seq(); eat();
+        const [kind,label,ul] = CMDS[v];
+        kids.push({kind, label, ul, ch});
+      } else if (t === 'WORD') { eat(); kids.push({word: v}); }
+      else break;
+    }
+    return kids;
+  }
+  const root = [];
+  while (peek()[0] !== 'EOF') {
+    const [t,v] = peek();
+    if (t === 'CMD') {
+      eat(); eat();
+      const ch = seq(); eat();
+      const [kind,label,ul] = CMDS[v];
+      root.push({kind, label, ul, ch});
+    } else if (t === 'WORD') { eat(); root.push({word: v}); }
+    else break;
+  }
+  return root;
+}
+
+// ── Constantes de geometría ───────────────────────────────────────────────────
+const CW = 8.5, SW = 8, FS = 16;
+const ASCENT   = FS * 0.78;   // tope del texto sobre la baseline
+const DESCENT  = FS * 0.25;   // fondo del texto bajo la baseline
+const SL_GAP   = -2;          // separación negativa: spanline más pegada al texto
+const SL_PATA_H = 10;         // altura mínima pata spanline
+const SL_STEP   = 18;         // separación entre niveles spanline
+const SL_LBL_GAP = 3;         // gap entre línea spanline y label
+const SL_XPAD     = 2;        // padding horizontal sutil para spanline; evita choque entre patas contiguas
+const OB_PATA_MIN = 1;        // distancia mínima fondo texto → línea openbox
+const OB_GAP      = 5;        // gap entre fondo hijos y línea openbox padre
+const OB_XPAD     = 3;        // padding horizontal moderado para openbox
+const PATA_TAG = 1, STEP_TAG = 16;
+const LBH = 13, LBGAP = 3;
+const PAD = 38, PTOP = 16, PBOT = 20;
+const LW = 1.8, ULW = 1.4;
+const BELOW = new Set(["openbox","tagbelow"]);
+const ABOVE = new Set(["spanline"]);
+
+// ── Cálculo de filas ──────────────────────────────────────────────────────────
+function rowBelow(node) {
+  let max = -1;
+  for (const c of node.ch) if (!c.word && BELOW.has(c.kind)) max = Math.max(max, rowBelow(c));
+  return max + 1;
+}
+function rowAbove(node) {
+  let max = -1;
+  for (const c of node.ch) if (!c.word && ABOVE.has(c.kind)) max = Math.max(max, rowAbove(c));
+  return max + 1;
+}
+function maxDA(nodes) {
+  let m = 0;
+  for (const n of nodes) {
+    if (n.word) continue;
+    if (ABOVE.has(n.kind)) m = Math.max(m, rowAbove(n) + 1);
+    m = Math.max(m, maxDA(n.ch));
+  }
+  return m;
+}
+
+// ── Posición vertical de la línea openbox ─────────────────────────────────────
+function bottomOf(nodes, by) {
+  let m = by + DESCENT;
+  for (const n of nodes) {
+    if (n.word) continue;
+    if (n.kind === 'tagbelow') m = Math.max(m, by + DESCENT + PATA_TAG + rowBelow(n)*(PATA_TAG+STEP_TAG) + LBH);
+    else if (n.kind === 'openbox') m = Math.max(m, lineYofBox(n, by) + LBGAP + LBH);
+  }
+  return m;
+}
+function lineYofBox(node, by) {
+  return Math.max(by + DESCENT + OB_PATA_MIN, bottomOf(node.ch, by) + OB_GAP);
+}
+function maxYBelow(nodes, by) {
+  let m = 0;
+  for (const n of nodes) {
+    if (n.word) continue;
+    if (n.kind === 'openbox')  m = Math.max(m, lineYofBox(n, by) + LBGAP + LBH);
+    if (n.kind === 'tagbelow') m = Math.max(m, by + DESCENT + PATA_TAG + rowBelow(n)*(PATA_TAG+STEP_TAG) + LBH);
+    m = Math.max(m, maxYBelow(n.ch, by));
+  }
+  return m;
+}
+
+// ── Layout horizontal ─────────────────────────────────────────────────────────
+function layout(nodes, x0) {
+  const boxes = []; let x = x0;
+  for (const n of nodes) {
+    if (n.word) {
+      const w = n.word.length * CW;
+      boxes.push({x, w, n}); x += w + SW;
+    } else {
+      const {boxes: ch, x: nx} = layout(n.ch, x);
+      const bx = ch.length ? ch[0].x : x;
+      const bw = Math.max((nx - SW) - bx, n.label.length * CW * 0.75);
+      boxes.push({x: bx, w: bw, n, ch}); x = nx;
+    }
+  }
+  return {boxes, x};
+}
+
+// ── Render SVG ────────────────────────────────────────────────────────────────
+function renderSVG(src) {
+  const nodes = parse(src);
+  const slMax = maxDA(nodes);
+  const above = PTOP + slMax*(SL_PATA_H+SL_STEP) + LBH + SL_LBL_GAP + SL_GAP + 8;
+  const TY = above;
+  const yMax = maxYBelow(nodes, TY);
+  const below = Math.max(yMax - TY - FS*0.25, 0) + PBOT + 8;
+  const {boxes, x: xend} = layout(nodes, 0);
+  const W = (xend - SW) + PAD*2;
+  const H = TY + FS*0.75 + below;
+
+  const isDark = window.matchMedia('(prefers-color-scheme:dark)').matches;
+  const fg = isDark ? '#e8e6df' : '#1a1a1a';
+  const bg = isDark ? '#1e1e1e' : 'white';
+
+  const elT = [], elP = [];
+
+  const path = (d) =>
+    elP.push(`<path d="${d}" stroke="${fg}" stroke-width="${LW}" fill="none" stroke-linejoin="miter"/>`);
+  const ln = (x1,y1,x2,y2,w=ULW) =>
+    elP.push(`<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="${fg}" stroke-width="${w}"/>`);
+
+  function draw(b, by) {
+    const n = b.n, bx = b.x + PAD, bw = b.w, rx = bx + bw, cx = bx + bw/2;
+    if (n.word) {
+      elT.push(`<text class="w" x="${f(bx)}" y="${f(by)}">${esc(n.word)}</text>`);
+      return;
+    }
+    for (const c of b.ch) draw(c, by);
+
+    if (n.kind === 'spanline') {
+      const row   = rowAbove(n);
+      const pataY = by - ASCENT - SL_GAP;
+      const ly    = pataY - SL_PATA_H - row*(SL_PATA_H + SL_STEP);
+      const lx    = bx - SL_XPAD;
+      const rr    = rx + SL_XPAD;
+
+      path(`M ${f(lx)} ${f(pataY)} L ${f(lx)} ${f(ly)} L ${f(rr)} ${f(ly)} L ${f(rr)} ${f(pataY)}`);
+      elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ly - SL_LBL_GAP - 2)}" text-anchor="middle">${esc(n.label)}</text>`);
+
+    } else if (n.kind === 'openbox') {
+      const pataY = by + DESCENT;
+      const ly    = lineYofBox(n, by);
+      const lx    = bx - OB_XPAD;
+      const rr    = rx + OB_XPAD;
+      path(`M ${f(lx)} ${f(pataY)} L ${f(lx)} ${f(ly)} L ${f(rr)} ${f(ly)} L ${f(rr)} ${f(pataY)}`);
+      elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ly + LBGAP + LBH - 2)}" text-anchor="middle">${esc(n.label)}</text>`);
+
+    } else if (n.kind === 'tagbelow') {
+      const row = rowBelow(n);
+      const ty  = by + DESCENT + PATA_TAG + row*(PATA_TAG + STEP_TAG) + LBH;
+      elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ty)}" text-anchor="middle">${esc(n.label)}</text>`);
+      if (n.ul) ln(bx, by + DESCENT, rx, by + DESCENT);
+    }
+  }
+
+  for (const b of boxes) draw(b, TY);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}" height="${f(H)}" viewBox="0 0 ${f(W)} ${f(H)}">
+<style>
+  text { font-family: Georgia, 'Times New Roman', serif; fill: ${fg}; }
+  .w   { font-size: ${FS}px; }
+  .lbl { font-size: 11px; font-family: system-ui, sans-serif; font-variant: small-caps; letter-spacing: .05em; }
+</style>
+<rect width="${f(W)}" height="${f(H)}" fill="${bg}"/>
+${elT.join('\n')}
+${elP.join('\n')}
+</svg>`;
+}
+
+// ── Utilidades ────────────────────────────────────────────────────────────────
+const f   = n => n.toFixed(1);
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function update() {
+  const src  = document.getElementById('src').value.trim();
+  const err  = document.getElementById('err');
+  const prev = document.getElementById('preview');
+  if (!src) { prev.innerHTML = ''; return; }
+  try {
+    prev.innerHTML = renderSVG(src);
+    err.style.display = 'none';
+  } catch(e) {
+    err.textContent = 'Error: ' + e.message;
+    err.style.display = 'block';
+  }
+}
+
+function ins(txt) {
+  const ta = document.getElementById('src');
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.slice(0, s) + txt + ta.value.slice(e);
+  ta.selectionStart = ta.selectionEnd = s + txt.length;
+  ta.focus(); update();
+}
+
+function getSVG() { return renderSVG(document.getElementById('src').value.trim()); }
+
+function dlSVG() {
+  const a = document.createElement('a');
+  a.href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getSVG());
+  a.download = 'analisis.svg'; a.click();
+}
+
+function dlPNG() {
+  const svg = getSVG();
+  const url = URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'}));
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = img.width * 2; c.height = img.height * 2;
+    const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = c.toDataURL('image/png'); a.download = 'analisis.png'; a.click();
+  };
+  img.src = url;
+}
+
+function copySVG() {
+  navigator.clipboard.writeText(getSVG()).then(() => {
+    const b = event.currentTarget, orig = b.textContent;
+    b.textContent = '✓ Copiado';
+    setTimeout(() => b.textContent = orig, 1500);
+  });
+}
+
+document.getElementById('src').addEventListener('input', update);
+document.getElementById('year').textContent = new Date().getFullYear();
+loadCustomTags();
+update();
+</script>
+</body>
+</html>
