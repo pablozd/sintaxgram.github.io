@@ -33,12 +33,6 @@
   --font-sans: system-ui, sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1e1e1e; --bg2: #2a2a2a; --fg: #e8e6df; --fg2: #999;
-    --border: #444; --border2: #555;
-  }
-}
 body { font-family: var(--font-sans); background: var(--bg); color: var(--fg); min-height: 100vh; display: flex; flex-direction: column; }
 header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
 header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
@@ -989,9 +983,9 @@ function renderSVG(src) {
     ? allBoxes[allBoxes.length-1].x + allBoxes[allBoxes.length-1].w
     : 0;
 
-  const isDark = window.matchMedia('(prefers-color-scheme:dark)').matches;
-  const fg = isDark ? '#e8e6df' : '#1a1a1a';
-  const bg = isDark ? '#1e1e1e' : 'white';
+  const isDark = false;
+  const fg = '#1a1a1a';
+  const bg = 'white';
   const fontFam = currentFont();
 
   const defs = `<defs>
