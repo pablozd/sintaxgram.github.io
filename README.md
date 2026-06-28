@@ -4,7 +4,7 @@
 ![Herramienta web](https://img.shields.io/badge/herramienta-web-brightgreen)
 ![Lingüística](https://img.shields.io/badge/ling%C3%BC%C3%ADstica-sintaxis-purple)
 ![SVG](https://img.shields.io/badge/exporta-SVG%20%7C%20PNG-lightgrey)
-![Licencia](https://img.shields.io/badge/licencia-MIT%20%7C%20LPPL%20%7C%20CC--BY-blue)
+![Licencia](https://img.shields.io/badge/licencia-MIT%20%7C%20CC--BY-blue)
 
 **Sintaxgram** es una herramienta web simple para generar diagramas de análisis sintáctico a partir de una notación textual compacta.
 
