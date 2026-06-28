@@ -1,5 +1,10 @@
 # Sintaxgram
 
+[![Sintaxgram](https://img.shields.io/badge/Sintaxgram-an%C3%A1lisis%20sint%C3%A1ctico-blue)](https://sintaxgram.pablozd.ar)
+![Herramienta web](https://img.shields.io/badge/herramienta-web-brightgreen)
+![Lingüística](https://img.shields.io/badge/ling%C3%BC%C3%ADstica-sintaxis-purple)
+![SVG](https://img.shields.io/badge/exporta-SVG%20%7C%20PNG-lightgrey)
+
 **Sintaxgram** es una herramienta web simple para generar diagramas de análisis sintáctico a partir de una notación textual compacta.
 
 Está pensada para uso docente en gramática, sintaxis y análisis de oraciones. Permite escribir una oración anotada con funciones sintácticas y obtener automáticamente una visualización con etiquetas, subrayados, cajas abiertas y líneas superiores.
