@@ -12,6 +12,10 @@ Está pensada para uso docente en gramática, sintaxis y análisis de oraciones.
 
 → **[sintaxgram.pablozd.ar](https://sintaxgram.pablozd.ar)**
 
+<p align="center">
+  <img src="docs/sintaxgram-captura.svg" alt="Captura real de Sintaxgram" width="980">
+</p>
+
 ## Características
 
 - Interfaz web en un único archivo HTML.
