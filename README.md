@@ -12,8 +12,10 @@ Está pensada para uso docente en gramática, sintaxis y análisis de oraciones.
 
 → **[sintaxgram.pablozd.ar](https://sintaxgram.pablozd.ar)**
 
+## Captura
+
 <p align="center">
-  <img src="docs/sintaxgram-captura.png" alt="Captura real de Sintaxgram" width="980">
+  <img src="docs/sintaxgram-captura.png" alt="Captura de Sintaxgram" width="980">
 </p>
 
 ## Características
@@ -174,6 +176,8 @@ Versión mínima:
 ```txt
 .
 ├── index.html
+├── docs/
+│   └── sintaxgram-captura.png
 └── README.md
 ```
 
@@ -217,6 +221,6 @@ Proyecto en desarrollo. La versión actual está orientada a generar diagramas s
 
 ## Licencia
 
-Pendiente de definir.
+Code: MIT · Diagrams/documentation: CC BY 4.0
 
-Una opción razonable para este tipo de herramienta es MIT, si se quiere permitir reutilización, modificación y distribución con pocas restricciones.
+© 2026 Pablo Zdrojewski — support@pablozd.ar
