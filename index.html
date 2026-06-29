@@ -108,6 +108,17 @@ textarea {
 .config-content input[type="range"] { width: 120px; cursor: pointer; }
 .config-content select { font-size: 12px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border2); background: var(--bg); color: var(--fg); }
 
+/* ── Color pickers ── */
+.color-picker-wrap { display: flex; flex-direction: column; gap: 4px; }
+.color-picker-wrap label { font-size: 12px; color: var(--fg2); white-space: nowrap; }
+.color-picker-row { display: flex; align-items: center; gap: 4px; }
+.color-swatch { width: 18px; height: 18px; border-radius: 3px; border: 1.5px solid var(--border2); cursor: pointer; flex-shrink: 0; transition: transform 0.1s; }
+.color-swatch:hover { transform: scale(1.15); border-color: var(--fg); }
+.color-swatch.active { border-color: var(--fg); box-shadow: 0 0 0 2px var(--fg); }
+.color-native { width: 22px; height: 22px; border: none; padding: 0; background: none; cursor: pointer; border-radius: 3px; overflow: hidden; }
+.color-native::-webkit-color-swatch-wrapper { padding: 0; }
+.color-native::-webkit-color-swatch { border: 1.5px solid var(--border2); border-radius: 3px; }
+
 /* ── Etiquetas personalizadas ── */
 .custom-row { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; background: var(--bg2); }
 .custom-row span.lbl { font-size: 12px; color: var(--fg2); margin-right: 2px; white-space: nowrap; }
@@ -318,6 +329,14 @@ textarea {
           <option value="sans">Sans serif</option>
         </select>
       </label>
+      <div class="color-picker-wrap">
+        <label>Color del texto:</label>
+        <div class="color-picker-row" id="textColorRow"></div>
+      </div>
+      <div class="color-picker-wrap">
+        <label>Color de líneas y etiquetas:</label>
+        <div class="color-picker-row" id="lineColorRow"></div>
+      </div>
     </div>
   </details>
   <details class="hint-box">
@@ -351,6 +370,11 @@ textarea {
       <br>
       <strong>Etiquetas personalizadas</strong><br>
       Con <em>+ nueva etiqueta</em> podés definir tus propios comandos. Quedan guardados en este navegador; exportalos/importalos para respaldarlos o compartirlos con colegas.
+      <br><br>
+      <strong>Color individual</strong><br>
+      <code>CMD[color]{…}</code> = aplica un color específico a esa línea/etiqueta.<br>
+      Aceptá nombres en español (<code>rojo</code>, <code>azul</code>, <code>verde</code>…), inglés (<code>red</code>, <code>blue</code>, <code>green</code>…) o hex (<code>#2563EB</code>).<br>
+      Ej: <code>SES[rojo]{Juan} PVS[#2563EB]{analiza}</code>
     </div>
   </details>
 </div>
@@ -385,6 +409,73 @@ textarea {
 </footer>
 
 <script>
+// ── Colores globales ──────────────────────────────────────────────────────────
+let TEXT_COLOR = '#1a1a1a';
+let LINE_COLOR = '#1a1a1a';
+
+const COLOR_PALETTE = [
+  { hex: '#1a1a1a', name: 'Negro'   },
+  { hex: '#6B7280', name: 'Gris'    },
+  { hex: '#DC2626', name: 'Rojo'    },
+  { hex: '#EA580C', name: 'Naranja' },
+  { hex: '#2563EB', name: 'Azul'    },
+  { hex: '#16A34A', name: 'Verde'   },
+  { hex: '#7C3AED', name: 'Violeta' },
+  { hex: '#DB2777', name: 'Rosa'    },
+];
+
+const COLOR_NAMES = {
+  negro:'#1a1a1a', gris:'#6B7280', rojo:'#DC2626', naranja:'#EA580C',
+  azul:'#2563EB', verde:'#16A34A', violeta:'#7C3AED', rosa:'#DB2777',
+  blanco:'#ffffff', amarillo:'#EAB308', celeste:'#0EA5E9', marron:'#92400E',
+  black:'#1a1a1a', gray:'#6B7280', grey:'#6B7280', red:'#DC2626',
+  orange:'#EA580C', blue:'#2563EB', green:'#16A34A', purple:'#7C3AED',
+  pink:'#DB2777', white:'#ffffff', yellow:'#EAB308', brown:'#92400E',
+};
+
+function resolveColor(str) {
+  if (!str) return null;
+  const s = str.trim().toLowerCase();
+  if (COLOR_NAMES[s]) return COLOR_NAMES[s];
+  if (/^#[0-9a-f]{3,6}$/i.test(s)) return s;
+  if (/^[0-9a-f]{6}$/i.test(s)) return '#' + s;
+  return null;
+}
+
+function buildColorRow(rowId, getCurrent, setCurrent) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  row.innerHTML = '';
+  for (const p of COLOR_PALETTE) {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (getCurrent() === p.hex ? ' active' : '');
+    sw.style.background = p.hex;
+    sw.title = p.name;
+    sw.addEventListener('click', () => {
+      setCurrent(p.hex);
+      buildColorRow(rowId, getCurrent, setCurrent);
+      update();
+    });
+    row.appendChild(sw);
+  }
+  const inp = document.createElement('input');
+  inp.type = 'color';
+  inp.className = 'color-native';
+  inp.value = getCurrent();
+  inp.title = 'Color personalizado';
+  inp.addEventListener('input', () => {
+    setCurrent(inp.value);
+    row.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    update();
+  });
+  row.appendChild(inp);
+}
+
+function initColorPickers() {
+  buildColorRow('textColorRow', () => TEXT_COLOR, v => { TEXT_COLOR = v; });
+  buildColorRow('lineColorRow', () => LINE_COLOR, v => { LINE_COLOR = v; });
+}
+
 // ── Tabla de comandos (sincronizada con sintaxismark v0.6.20) ──────────────────
 const CMDS = {
   SES:["spanline","ses",false], PVS:["spanline","pvs",false], PVC:["spanline","pvc",false],
@@ -634,6 +725,21 @@ function tokenize(src) {
         }
       }
 
+      // Detectar color individual: CMD[color]{ → separa en CMD + CLR + LB
+      const mColor = w.match(/^(.+)\[([^\]]+)\]$/);
+      if (mColor) {
+        const base = mColor[1], clr = mColor[2];
+        if (Object.prototype.hasOwnProperty.call(CMDS, base)) {
+          let k = j;
+          while (k < src.length && /\s/.test(src[k])) k++;
+          if (k < src.length && src[k] === '{') {
+            toks.push(['CMD', base]);
+            toks.push(['CLR', clr]);
+            i = j; continue;
+          }
+        }
+      }
+
       // Detectar super/subíndice pegado al final de la palabra: palabra^{...} o palabra_{...}
       // Puede haber múltiples (^{a}_{b})
       const supsubRe = /^(.*?)([\^_]\{[^}]*\})+$/;
@@ -678,6 +784,10 @@ function parse(src) {
     if (peek()[0] === 'MOD') return eat()[1];
     return null;
   }
+  function eatClr() {
+    if (peek()[0] === 'CLR') return eat()[1];
+    return null;
+  }
   // Consume SUP/SUB tokens y los acumula sobre el nodo previo o crea nodo flotante
   function eatIndices(kids) {
     while (peek()[0] === 'SUP' || peek()[0] === 'SUB') {
@@ -698,10 +808,10 @@ function parse(src) {
     while (!['RB','EOF'].includes(peek()[0])) {
       const [t,v] = peek();
       if (t === 'CMD') {
-        eat(); const mod = eatMod(); eat();
+        eat(); const mod = eatMod(); const clr = eatClr(); eat();
         const ch = seq(); eat();
         const [kind,label,ul] = CMDS[v];
-        kids.push({kind, label, ul, ch, mod});
+        kids.push({kind, label, ul, ch, mod, clr});
       } else if (t === 'WORD') { eat(); kids.push({word: v}); }
       else if (t === 'SPACE') { eat(); kids.push({space: true, gap: EXPLICIT_GAP}); }
       else if (t === 'SUP' || t === 'SUB') { eatIndices(kids); continue; }
@@ -715,10 +825,10 @@ function parse(src) {
   while (peek()[0] !== 'EOF') {
     const [t,v] = peek();
     if (t === 'CMD') {
-      eat(); const mod = eatMod(); eat();
+      eat(); const mod = eatMod(); const clr = eatClr(); eat();
       const ch = seq(); eat();
       const [kind,label,ul] = CMDS[v];
-      root.push({kind, label, ul, ch, mod});
+      root.push({kind, label, ul, ch, mod, clr});
     } else if (t === 'WORD') { eat(); root.push({word: v}); }
     else if (t === 'SPACE') { eat(); root.push({space: true, gap: EXPLICIT_GAP}); }
     else if (t === 'SUP' || t === 'SUB') { eatIndices(root); continue; }
@@ -982,16 +1092,17 @@ function renderSVG(src) {
     : 0;
 
   const isDark = false;
-  const fg = '#1a1a1a';
+  const fg = TEXT_COLOR;
+  const fgLine = LINE_COLOR;
   const bg = 'white';
   const fontFam = currentFont();
 
   const defs = `<defs>
   <marker id="arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
-    <polygon points="0 0, 7 2.5, 0 5" fill="${fg}"/>
+    <polygon points="0 0, 7 2.5, 0 5" fill="${fgLine}"/>
   </marker>
   <marker id="arrl" markerWidth="7" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
-    <polygon points="0 0, 7 2.5, 0 5" fill="${fg}"/>
+    <polygon points="0 0, 7 2.5, 0 5" fill="${fgLine}"/>
   </marker>
 </defs>
 <style>
@@ -1004,13 +1115,15 @@ function renderSVG(src) {
   // Renderizar un conjunto de cajas (un renglón) a un offset Y dado.
   // Las cajas ya vienen con x re-offset a 0 y mods de ruptura en n.mod.
   function renderLine(lineBoxes, byOffset, elT, elP) {
-    const ln = (x1,y1,x2,y2,w=ULW) =>
-      elP.push(`<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="${fg}" stroke-width="${w}"/>`);
 
     function draw(b, by) {
       const n = b.n;
       const mod = n.mod || null;
       const bx = b.x + PAD, bw = b.w, rx = bx + bw, cx = bx + bw/2;
+      // color efectivo: individual → global de líneas
+      const nc = n.clr ? (resolveColor(n.clr) || fgLine) : fgLine;
+      const ln = (x1,y1,x2,y2,w=ULW) =>
+        elP.push(`<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="${nc}" stroke-width="${w}"/>`);
 
       if (n.supFloat || n.subFloat) {
         const txt = n.supFloat || n.subFloat;
@@ -1022,7 +1135,6 @@ function renderSVG(src) {
 
       if (n.word || n.fmt) {
         const txt = n.word ?? n.text;
-        // Atributos de fuente según formato
         let fontStyle = '', fontWeight = '', extra = '';
         if (n.fmt === 'i') fontStyle = ' font-style="italic"';
         if (n.fmt === 'b') fontWeight = ' font-weight="bold"';
@@ -1056,10 +1168,10 @@ function renderSVG(src) {
         const rightEnd = mod !== 'r' && mod !== 'rl' && mod !== 'ne' && mod !== 'nr';
         const leftArr  = mod === 'l' || mod === 'rl';
         const rightArr = mod === 'r' || mod === 'rl';
-        elP.push(`<line x1="${f(lx)}" y1="${f(ly)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${fg}" stroke-width="${LW}" marker-end="${rightArr ? 'url(#arr)' : 'none'}" marker-start="${leftArr ? 'url(#arrl)' : 'none'}"/>`);
-        if (leftEnd)  elP.push(`<line x1="${f(lx)}" y1="${f(pataY)}" x2="${f(lx)}" y2="${f(ly)}" stroke="${fg}" stroke-width="${LW}"/>`);
-        if (rightEnd) elP.push(`<line x1="${f(rr)}" y1="${f(pataY)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${fg}" stroke-width="${LW}"/>`);
-        elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ly - SL_LBL_GAP - 2)}" text-anchor="middle">${esc(n.label)}</text>`);
+        elP.push(`<line x1="${f(lx)}" y1="${f(ly)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${nc}" stroke-width="${LW}" marker-end="${rightArr ? 'url(#arr)' : 'none'}" marker-start="${leftArr ? 'url(#arrl)' : 'none'}"/>`);
+        if (leftEnd)  elP.push(`<line x1="${f(lx)}" y1="${f(pataY)}" x2="${f(lx)}" y2="${f(ly)}" stroke="${nc}" stroke-width="${LW}"/>`);
+        if (rightEnd) elP.push(`<line x1="${f(rr)}" y1="${f(pataY)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${nc}" stroke-width="${LW}"/>`);
+        elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ly - SL_LBL_GAP - 2)}" text-anchor="middle" fill="${nc}">${esc(n.label)}</text>`);
 
       } else if (n.kind === 'openbox') {
         const pataY = by + DESCENT;
@@ -1070,15 +1182,15 @@ function renderSVG(src) {
         const rightEnd = mod !== 'r' && mod !== 'rl' && mod !== 'ne' && mod !== 'nr';
         const leftArr  = mod === 'l' || mod === 'rl';
         const rightArr = mod === 'r' || mod === 'rl';
-        elP.push(`<line x1="${f(lx)}" y1="${f(ly)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${fg}" stroke-width="${LW}" marker-end="${rightArr ? 'url(#arr)' : 'none'}" marker-start="${leftArr ? 'url(#arrl)' : 'none'}"/>`);
-        if (leftEnd)  elP.push(`<line x1="${f(lx)}" y1="${f(pataY)}" x2="${f(lx)}" y2="${f(ly)}" stroke="${fg}" stroke-width="${LW}"/>`);
-        if (rightEnd) elP.push(`<line x1="${f(rr)}" y1="${f(pataY)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${fg}" stroke-width="${LW}"/>`);
-        elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ly + LBGAP + LBH - 2)}" text-anchor="middle">${esc(n.label)}</text>`);
+        elP.push(`<line x1="${f(lx)}" y1="${f(ly)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${nc}" stroke-width="${LW}" marker-end="${rightArr ? 'url(#arr)' : 'none'}" marker-start="${leftArr ? 'url(#arrl)' : 'none'}"/>`);
+        if (leftEnd)  elP.push(`<line x1="${f(lx)}" y1="${f(pataY)}" x2="${f(lx)}" y2="${f(ly)}" stroke="${nc}" stroke-width="${LW}"/>`);
+        if (rightEnd) elP.push(`<line x1="${f(rr)}" y1="${f(pataY)}" x2="${f(rr)}" y2="${f(ly)}" stroke="${nc}" stroke-width="${LW}"/>`);
+        elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ly + LBGAP + LBH - 2)}" text-anchor="middle" fill="${nc}">${esc(n.label)}</text>`);
 
       } else if (n.kind === 'tagbelow') {
         const row = rowBelow(n);
         const ty  = by + DESCENT + PATA_TAG + row*(PATA_TAG + STEP_TAG) + LBH;
-        elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ty)}" text-anchor="middle">${esc(n.label)}</text>`);
+        elP.push(`<text class="lbl" x="${f(cx)}" y="${f(ty)}" text-anchor="middle" fill="${nc}">${esc(n.label)}</text>`);
         if (n.ul) ln(bx, by + DESCENT, rx, by + DESCENT);
       }
     }
@@ -1279,7 +1391,9 @@ document.getElementById('src').addEventListener('keydown', e => {
 });
 document.getElementById('year').textContent = new Date().getFullYear();
 loadCustomTags();
+initColorPickers();
 update();
 </script>
 </body>
 </html>
+
